@@ -43,7 +43,7 @@ export default class MovieService {
   // tag::all[]
   async all(
     sort = "title",
-    order = "ASC",
+    order = "ASC", //ascending //DSC = descending
     limit = 6,
     skip = 0,
     userId = undefined
@@ -72,8 +72,15 @@ export default class MovieService {
       );
     });
     // TODO: Get a list of Movies from the Result
+    const movies = res.records.map((row) => {
+      console.log("Row movies: ", row.get("movie"));
+      toNativeTypes(row.get("movie"));
+    });
+    console.log("Movies: ", movies);
     // TODO: Close the session
-    return popular;
+    await session.close();
+    // return popular;
+    return movies;
   }
   // end::all[]
 
