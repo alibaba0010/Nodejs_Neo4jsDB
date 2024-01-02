@@ -54,6 +54,7 @@ export default class MovieService {
     // TODO: Execute a query in a new Read Transaction
 
     const res = await session.executeRead(async (tx) => {
+      console.log("Userid, tx", userId, tx);
       const favorites = await this.getUserFavorites(tx, userId);
 
       return tx.run(
@@ -71,11 +72,13 @@ export default class MovieService {
         { skip: int(skip), limit: int(limit), favorites }
       );
     });
+
+    console.log("Response: ", res);
     // TODO: Get a list of Movies from the Result
-    const movies = res.records.map((row) => {
-      console.log("Row movies: ", row.get("movie"));
-      toNativeTypes(row.get("movie"));
-    });
+    const movies = res.records.map((row) =>
+      // console.log("Row movies: ", row.get("movie"));
+      toNativeTypes(row.get("movie"))
+    );
     console.log("Movies: ", movies);
     // TODO: Close the session
     await session.close();

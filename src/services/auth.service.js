@@ -1,14 +1,16 @@
-import jwt from 'jsonwebtoken'
-import { hash, compare } from 'bcrypt'
-import { user } from '../../test/fixtures/users.js'
-import ValidationError from '../errors/validation.error.js'
-import { JWT_SECRET, SALT_ROUNDS } from '../constants.js'
+/* eslint-disable semi */
+/* eslint-disable quotes */
+import jwt from "jsonwebtoken";
+import { hash, compare } from "bcrypt";
+import { user } from "../../test/fixtures/users.js";
+import ValidationError from "../errors/validation.error.js";
+import { JWT_SECRET, SALT_ROUNDS } from "../constants.js";
 
 export default class AuthService {
   /**
    * @type {neo4j.Driver}
    */
-  driver
+  driver;
 
   /**
    * The constructor expects an instance of the Neo4j Driver, which will be
@@ -18,7 +20,7 @@ export default class AuthService {
    */
   // tag::constructor[]
   constructor(driver) {
-    this.driver = driver
+    this.driver = driver;
   }
   // tag::constructor[]
 
@@ -38,25 +40,66 @@ export default class AuthService {
    */
   // tag::register[]
   async register(email, plainPassword, name) {
-    const encrypted = await hash(plainPassword, parseInt(SALT_ROUNDS))
+    const encrypted = await hash(plainPassword, parseInt(SALT_ROUNDS));
 
-    // tag::constraintError[]
-    // TODO: Handle Unique constraints in the database
-    if (email !== 'graphacademy@neo4j.com') {
-      throw new ValidationError(`An account already exists with the email address ${email}`, {
-        email: 'Email address taken'
-      })
+    // Open a new session
+    const session = this.driver.session();
+
+    // tag::catch[]
+    try {
+      // tag::create[]
+      // Create the User node in a write transaction
+      const res = await session.executeWrite((tx) =>
+        tx.run(
+          `
+            CREATE (u:User {
+              userId: randomUuid(),
+              email: $email,
+              password: $encrypted,
+              name: $name
+            })
+            RETURN u // user node
+          `,
+          { email, encrypted, name }
+        )
+      );
+      // end::create[]
+
+      // tag::extract[]
+      // Extract the user from the result
+      const [first] = res.records;
+      const node = first.get("u");
+
+      const { password, ...safeProperties } = node.properties;
+      // end::extract[]
+
+      // Close the session
+      await session.close();
+
+      // tag::return[]
+      return {
+        ...safeProperties,
+        token: jwt.sign(this.userToClaims(safeProperties), JWT_SECRET),
+      };
+      // end::return[]
+    } catch (e) {
+      // Handle unique constraints in the database
+      if (e.code === "Neo.ClientError.Schema.ConstraintValidationFailed") {
+        throw new ValidationError(
+          `An account already exists with the email address ${email}`,
+          {
+            email: "Email address already exist",
+          }
+        );
+      }
+
+      // Non-neo4j error
+      throw e;
+    } finally {
+      // Close the session
+      await session.close();
     }
-    // end::constraintError[]
-
-    // TODO: Save user
-
-    const { password, ...safeProperties } = user
-
-    return {
-      ...safeProperties,
-      token: jwt.sign(this.userToClaims(safeProperties), JWT_SECRET),
-    }
+    // end::catch[]
   }
   // end::register[]
 
@@ -71,7 +114,7 @@ export default class AuthService {
    *
    * {
    *   userId: 'some-random-uuid',
-   *   email: 'graphacademy@neo4j.com',
+   *   email: 'neo4j@neo4j.com',
    *   name: 'GraphAcademy User',
    *   token: '...'
    * }
@@ -82,20 +125,49 @@ export default class AuthService {
    */
   // tag::authenticate[]
   async authenticate(email, unencryptedPassword) {
-    // TODO: Authenticate the user from the database
-    if (email === 'graphacademy@neo4j.com' && unencryptedPassword === 'letmein') {
-      const { password, ...claims } = user.properties
+    // Open a new session
+    const session = this.driver.session();
 
-      return {
-        ...claims,
-        token: jwt.sign(claims, JWT_SECRET)
-      }
+    // tag::query[]
+    // Find the user node within a Read Transaction
+    const res = await session.executeRead((tx) =>
+      tx.run("MATCH (u:User {email: $email}) RETURN u", { email })
+    );
+    // end::query[]
+
+    // Close the session
+    await session.close();
+
+    // tag::norecords[]
+    // Verify the user exists
+    if (res.records.length === 0) {
+      return false;
     }
+    // end::norecords[]
 
-    return false
+    // tag::password[]
+    // Compare Passwords
+    const user = res.records[0].get("u");
+    const encryptedPassword = user.properties.password;
+
+    const correct = await compare(unencryptedPassword, encryptedPassword);
+
+    if (correct === false) {
+      return false;
+    }
+    // end::password[]
+
+    // tag::extractreturn[]
+    // Return User Details
+    const { password, ...safeProperties } = user.properties;
+
+    return {
+      ...safeProperties,
+      token: jwt.sign(this.userToClaims(safeProperties), JWT_SECRET),
+    };
+    // end::extract[]
   }
   // end::authenticate[]
-
 
   /**
    * @private
@@ -106,9 +178,9 @@ export default class AuthService {
    * @returns {Record<string, any>} Claims for the token
    */
   userToClaims(user) {
-    const { name, userId } = user
+    const { name, userId } = user;
 
-    return { sub: userId, userId, name, }
+    return { sub: userId, userId, name };
   }
 
   /**
@@ -123,6 +195,6 @@ export default class AuthService {
     return {
       ...claims,
       userId: claims.sub,
-    }
+    };
   }
 }
