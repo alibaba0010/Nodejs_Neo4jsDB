@@ -462,6 +462,7 @@ export default class MovieService {
   //   return [];
   // }
   async getUserFavorites(tx, userId) {
+    // transaction object
     // If userId is not defined, return an empty array
     if (userId === undefined) {
       return [];
