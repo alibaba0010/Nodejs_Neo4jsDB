@@ -118,8 +118,38 @@ export default class MovieService {
   ) {
     // TODO: Get Movies in a Genre
     // MATCH (m:Movie)-[:IN_GENRE]->(:Genre {name: $name})
+    // Open a new session
+    const session = this.driver.session();
 
-    return popular.slice(skip, skip + limit);
+    // Execute a query in a new Read Transaction
+    const res = await session.executeRead(async (tx) => {
+      // Get an array of IDs for the User's favorite movies
+      const favorites = await this.getUserFavorites(tx, userId);
+
+      // Retrieve a list of movies with the
+      // favorite flag appened to the movie's properties
+      return tx.run(
+        `
+        MATCH (m:Movie)-[:IN_GENRE]->(:Genre {name: $name})
+        WHERE m.\`${sort}\` IS NOT NULL
+        RETURN m {
+          .*,
+          favorite: m.tmdbId IN $favorites
+        } AS movie
+        ORDER BY m.\`${sort}\` ${order}
+        SKIP $skip
+        LIMIT $limit
+      `,
+        { skip: int(skip), limit: int(limit), favorites, name }
+      );
+    });
+    // Get a list of Movies from the Result
+    const movies = res.records.map((row) => toNativeTypes(row.get("movie")));
+
+    // Close the session
+    await session.close();
+    // return popular.slice(skip, skip + limit);
+    return movies;
   }
   // end::getByGenre[]
 
@@ -145,6 +175,19 @@ export default class MovieService {
    * @returns {Promise<Record<string, any>[]>}
    */
   // tag::getForActor[]
+  // async getForActor(
+  //   id,
+  //   sort = "title",
+  //   order = "ASC",
+  //   limit = 6,
+  //   skip = 0,
+  //   userId = undefined
+  // ) {
+  //   // TODO: Get Movies acted in by a Person
+  //   // MATCH (:Person {tmdbId: $id})-[:ACTED_IN]->(m:Movie)
+
+  //   return roles.slice(skip, skip + limit);
+  // }
   async getForActor(
     id,
     sort = "title",
@@ -153,10 +196,42 @@ export default class MovieService {
     skip = 0,
     userId = undefined
   ) {
-    // TODO: Get Movies acted in by a Person
+    // Get Movies acted in by a Person
     // MATCH (:Person {tmdbId: $id})-[:ACTED_IN]->(m:Movie)
 
-    return roles.slice(skip, skip + limit);
+    // Open a new session
+    const session = this.driver.session();
+
+    // Execute a query in a new Read Transaction
+    const res = await session.executeRead(async (tx) => {
+      // Get an array of IDs for the User's favorite movies
+      const favorites = await this.getUserFavorites(tx, userId);
+
+      // Retrieve a list of movies with the
+      // favorite flag appened to the movie's properties
+      return tx.run(
+        `
+        MATCH (:Person {tmdbId: $id})-[:ACTED_IN]->(m:Movie)
+        WHERE m.\`${sort}\` IS NOT NULL
+        RETURN m {
+          .*,
+          favorite: m.tmdbId IN $favorites
+        } AS movie
+        ORDER BY m.\`${sort}\` ${order}
+        SKIP $skip
+        LIMIT $limit
+      `,
+        { skip: int(skip), limit: int(limit), favorites, id }
+      );
+    });
+
+    // Get a list of Movies from the Result
+    const movies = res.records.map((row) => toNativeTypes(row.get("movie")));
+
+    // Close the session
+    await session.close();
+
+    return movies;
   }
   // end::getForActor[]
 
@@ -182,6 +257,19 @@ export default class MovieService {
    * @returns {Promise<Record<string, any>[]>}
    */
   // tag::getForDirector[]
+  // async getForDirector(
+  //   id,
+  //   sort = "title",
+  //   order = "ASC",
+  //   limit = 6,
+  //   skip = 0,
+  //   userId = undefined
+  // ) {
+  //   // TODO: Get Movies directed by a Person
+  //   // MATCH (:Person {tmdbId: $id})-[:DIRECTED]->(m:Movie)
+
+  //   return popular.slice(skip, skip + limit);
+  // }
   async getForDirector(
     id,
     sort = "title",
@@ -190,10 +278,42 @@ export default class MovieService {
     skip = 0,
     userId = undefined
   ) {
-    // TODO: Get Movies directed by a Person
+    // Get Movies directed by a Person
     // MATCH (:Person {tmdbId: $id})-[:DIRECTED]->(m:Movie)
 
-    return popular.slice(skip, skip + limit);
+    // Open a new session
+    const session = this.driver.session();
+
+    // Execute a query in a new Read Transaction
+    const res = await session.executeRead(async (tx) => {
+      // Get an array of IDs for the User's favorite movies
+      const favorites = await this.getUserFavorites(tx, userId);
+
+      // Retrieve a list of movies with the
+      // favorite flag appened to the movie's properties
+      return tx.run(
+        `
+        MATCH (:Person {tmdbId: $id})-[:DIRECTED]->(m:Movie)
+        WHERE m.\`${sort}\` IS NOT NULL
+        RETURN m {
+          .*,
+          favorite: m.tmdbId IN $favorites
+        } AS movie
+        ORDER BY m.\`${sort}\` ${order}
+        SKIP $skip
+        LIMIT $limit
+      `,
+        { skip: int(skip), limit: int(limit), favorites, id }
+      );
+    });
+
+    // Get a list of Movies from the Result
+    const movies = res.records.map((row) => toNativeTypes(row.get("movie")));
+
+    // Close the session
+    await session.close();
+
+    return movies;
   }
   // end::getForDirector[]
 
@@ -211,11 +331,51 @@ export default class MovieService {
    * @returns {Promise<Record<string, any>>}
    */
   // tag::findById[]
+  // async findById(id, userId = undefined) {
+  //   // TODO: Find a movie by its ID
+  //   // MATCH (m:Movie {tmdbId: $id})
+
+  //   return goodfellas;
+  // }
   async findById(id, userId = undefined) {
-    // TODO: Find a movie by its ID
+    // Find a movie by its ID
     // MATCH (m:Movie {tmdbId: $id})
 
-    return goodfellas;
+    // Open a new database session
+    const session = this.driver.session();
+
+    // Find a movie by its ID
+    const res = await session.executeRead(async (tx) => {
+      const favorites = await this.getUserFavorites(tx, userId);
+
+      return tx.run(
+        `
+        MATCH (m:Movie {tmdbId: $id})
+        RETURN m {
+          .*,
+          actors: [ (a)-[r:ACTED_IN]->(m) | a { .*, role: r.role } ],
+          directors: [ (d)-[:DIRECTED]->(m) | d { .* } ],
+          genres: [ (m)-[:IN_GENRE]->(g) | g { .name }],
+          ratingCount: count{ (m)<-[:RATED]-() },
+          favorite: m.tmdbId IN $favorites
+        } AS movie
+        LIMIT 1
+      `,
+        { id, favorites }
+      );
+    });
+
+    // Close the session
+    await session.close();
+
+    // Throw a 404 if the Movie cannot be found
+    if (res.records.length === 0) {
+      throw new NotFoundError(`Could not find a Movie with tmdbId ${id}`);
+    }
+
+    const [first] = res.records;
+
+    return toNativeTypes(first.get("movie"));
   }
   // end::findById[]
 
@@ -240,13 +400,51 @@ export default class MovieService {
    * @returns {Promise<Record<string, any>[]>}
    */
   // tag::getSimilarMovies[]
-  async getSimilarMovies(id, limit = 6, skip = 0, userId = undefined) {
-    // TODO: Get similar movies based on genres or ratings
+  // async getSimilarMovies(id, limit = 6, skip = 0, userId = undefined) {
+  //   // TODO: Get similar movies based on genres or ratings
 
-    return popular.slice(skip, skip + limit).map((item) => ({
-      ...item,
-      score: (Math.random() * 100).toFixed(2),
-    }));
+  //   return popular.slice(skip, skip + limit).map((item) => ({
+  //     ...item,
+  //     score: (Math.random() * 100).toFixed(2),
+  //   }));
+  // }
+  async getSimilarMovies(id, limit = 6, skip = 0, userId = undefined) {
+    // Get similar movies based on genres or ratings
+    // MATCH (:Movie {tmdbId: $id})-[:IN_GENRE|ACTED_IN|DIRECTED]->()<-[:IN_GENRE|ACTED_IN|DIRECTED]-(m)
+
+    // Open an Session
+    const session = this.driver.session();
+
+    // Get similar movies based on genres or ratings
+    const res = await session.executeRead(async (tx) => {
+      const favorites = await this.getUserFavorites(tx, userId);
+
+      return tx.run(
+        `
+        MATCH (:Movie {tmdbId: $id})-[:IN_GENRE|ACTED_IN|DIRECTED]->()<-[:IN_GENRE|ACTED_IN|DIRECTED]-(m)
+        WHERE m.imdbRating IS NOT NULL
+        WITH m, count(*) AS inCommon
+        WITH m, inCommon, m.imdbRating * inCommon AS score
+        ORDER BY score DESC
+        SKIP $skip
+        LIMIT $limit
+        RETURN m {
+          .*,
+          score: score,
+          favorite: m.tmdbId IN $favorites
+        } AS movie
+      `,
+        { id, skip: int(skip), limit: int(limit), favorites }
+      );
+    });
+
+    // Get a list of Movies from the Result
+    const movies = res.records.map((row) => toNativeTypes(row.get("movie")));
+
+    // Close the session
+    await session.close();
+
+    return movies;
   }
   // end::getSimilarMovies[]
 
@@ -260,8 +458,25 @@ export default class MovieService {
    * @returns {Promise<string[]>}
    */
   // tag::getUserFavorites[]
+  // async getUserFavorites(tx, userId) {
+  //   return [];
+  // }
   async getUserFavorites(tx, userId) {
-    return [];
+    // If userId is not defined, return an empty array
+    if (userId === undefined) {
+      return [];
+    }
+
+    const favoriteResult = await tx.run(
+      `
+        MATCH (:User {userId: $userId})-[:HAS_FAVORITE]->(m)
+        RETURN m.tmdbId AS id
+      `,
+      { userId }
+    );
+
+    // Extract the `id` value returned by the cypher query
+    return favoriteResult.records.map((row) => row.get("id"));
   }
   // end::getUserFavorites[]
 }
