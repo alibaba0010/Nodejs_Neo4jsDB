@@ -142,14 +142,34 @@ export default class FavoriteService {
   // tag::remove[]
   async remove(userId, movieId) {
     // TODO: Open a new Session
-    // TODO: Delete the HAS_FAVORITE relationship within a Write Transaction
-    // TODO: Close the session
-    // TODO: Return movie details and `favorite` property
+    const session = this.driver.session();
 
-    return {
-      ...goodfellas,
-      favorite: false,
-    };
+    // TODO: Delete the HAS_FAVORITE relationship within a Write Transaction
+    const res = await session.executeWrite((tx) =>
+      tx.run(
+        `
+          MATCH (u:User {userId: $userId})-[r:HAS_FAVORITE]->(m:Movie {tmdbId: $movieId})
+          DELETE r
+          RETURN m {
+            .*,
+            favorite: false
+          } AS movie
+        `,
+        { userId, movieId }
+      )
+    );
+    // TODO: Close the session
+    await session.close();
+
+    // TODO: Return movie details and `favorite` property
+    const [first] = res.records;
+    const movie = first.get("movie");
+
+    return toNativeTypes(movie);
+    // return {
+    //   ...goodfellas,
+    //   favorite: false,
+    // };
   }
   // end::remove[]
 }
