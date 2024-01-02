@@ -73,7 +73,6 @@ export default class MovieService {
       );
     });
 
-    console.log("Response: ", res);
     // TODO: Get a list of Movies from the Result
     const movies = res.records.map((row) =>
       // console.log("Row movies: ", row.get("movie"));
